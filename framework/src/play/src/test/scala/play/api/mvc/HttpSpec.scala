@@ -69,7 +69,7 @@ class HttpSpec extends Specification {
         Cookie("foo", "bar"),
         Cookie("bar", "qux"))
 
-      Cookies.merge("", cookies) must ===("foo=bar; Path=/; HTTPOnly; bar=qux; Path=/; HTTPOnly")
+      Cookies.merge("", cookies) must ===("foo=bar; Path=/; HTTPOnly;;bar=qux; Path=/; HTTPOnly")
     }
     "merge and remove duplicates" in {
       val cookies = Seq(
@@ -84,8 +84,8 @@ class HttpSpec extends Specification {
 
 
       Cookies.merge("", cookies) must ===(
-        "foo=baz; Path=/; Domain=FoO; HTTPOnly" + "; " + // Cookie("foo", "baz", domain=Some("FoO"))
-        "foo=baz; Path=/"                       + "; " + // Cookie("foo", "baz", httpOnly=false)
+        "foo=baz; Path=/; Domain=FoO; HTTPOnly" + ";;" + // Cookie("foo", "baz", domain=Some("FoO"))
+        "foo=baz; Path=/"                       + ";;" + // Cookie("foo", "baz", httpOnly=false)
         "foo=baz; Path=/blah; HTTPOnly"                  // Cookie("foo", "baz", path="/blah")
         )
     }

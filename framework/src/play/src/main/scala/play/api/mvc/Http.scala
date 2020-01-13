@@ -708,7 +708,6 @@ package play.api.mvc {
      * Extract cookies from the Set-Cookie header.
      */
     def apply(header: Option[String]) = new Cookies {
-
       lazy val cookies: Map[String, Cookie] = header.map(Cookies.decode(_)).getOrElse(Seq.empty).groupBy(_.name).mapValues(_.head)
 
       def get(name: String) = cookies.get(name)
@@ -718,6 +717,9 @@ package play.api.mvc {
         cookies.values.foreach(f)
       }
     }
+
+    val SetCookieHeaderSeparator = ";;"
+    val SetCookieHeaderSeparatorRegex = SetCookieHeaderSeparator.r
 
     /**
      * Encodes cookies as a proper HTTP header.
@@ -739,7 +741,7 @@ package play.api.mvc {
         }
         encoder.encode()
       }
-      newCookies.mkString("; ")
+      newCookies.mkString(SetCookieHeaderSeparator)
     }
 
     /**
@@ -752,8 +754,10 @@ package play.api.mvc {
     private lazy val decoder = new CookieDecoder()
     def decode(cookieHeader: String): Seq[Cookie] = {
       Try {
-        decoder.decode(cookieHeader).asScala.map { c =>
-          Cookie(c.getName, c.getValue, if (c.getMaxAge == Int.MinValue) None else Some(c.getMaxAge), Option(c.getPath).getOrElse("/"), Option(c.getDomain), c.isSecure, c.isHttpOnly)
+        SetCookieHeaderSeparatorRegex.split(cookieHeader).flatMap { cookieValue =>
+          decoder.decode(cookieValue).asScala.map { c =>
+            Cookie(c.getName, c.getValue, if (c.getMaxAge == Int.MinValue) None else Some(c.getMaxAge), Option(c.getPath).getOrElse("/"), Option(c.getDomain), c.isSecure, c.isHttpOnly)
+          }.toSeq
         }.toSeq
       }.getOrElse {
         Play.logger.debug(s"Couldn't decode the Cookie header containing: $cookieHeader")
