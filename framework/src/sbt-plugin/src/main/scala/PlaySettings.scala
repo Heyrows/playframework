@@ -52,6 +52,7 @@ trait PlaySettings {
     playPlugin := false,
 
     resolvers ++= Seq(
+      "GitHub Package Registry" at "https://maven.pkg.github.com/Heyrows/test-github-packages",
       "Typesafe Releases Repository" at "https://repo.typesafe.com/typesafe/releases/"
     ),
 

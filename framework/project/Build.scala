@@ -34,7 +34,7 @@ object BuildSettings {
   val experimental = Option(System.getProperty("experimental")).exists(_ == "true")
 
   val buildOrganization = "com.typesafe.play"
-  val buildVersion = propOr("play.version", "2.3-SNAPSHOT")
+  val buildVersion = "2.3-SNAPSHOT"
   val buildWithDoc = boolProp("generate.doc")
   val previousVersion = "2.3.0"
   // Libraries that are not Scala libraries or are SBT libraries should not be published if the binary
@@ -54,6 +54,17 @@ object BuildSettings {
   val publishNonCoreScalaLibraries = publishForScalaBinaryVersion == CrossVersion.binaryScalaVersion(buildScalaVersion)
 
   lazy val PerformanceTest = config("pt") extend(Test)
+
+  /*
+   TO CHANGE THE DESTINATION REPO ON GITHUB PACKAGES CHANGE :
+    - On this file : the two lines below & L83 + L84
+    - On PlaySettings.scala : change the resolver on L55
+
+   IF YOU WANT TO TEST BEFORE PUBLISHING FOR REAL, CHANGE :
+    - On framework/package : L12 change to publish-local for ivy or publishM2 for maven
+  */
+  val githubRepositoryOwner = "Heyrows"
+  val githubRepository = "test-github-packages"
 
   val playCommonSettings = Seq(
     organization := buildOrganization,
@@ -75,8 +86,8 @@ object BuildSettings {
     parallelExecution in PerformanceTest := false,
     pomExtra := {
       <scm>
-        <url>https://github.com/playframework/playframework</url>
-        <connection>scm:git:git@github.com:playframework/playframework.git</connection>
+        <url>https://github.com/Heyrows/test-github-packages</url>
+        <connection>scm:git@github.com:Heyrows/test-github-packages</connection>
       </scm>
         <developers>
           <developer>
@@ -104,22 +115,34 @@ object BuildSettings {
     publishLocal := (),
     PgpKeys.publishSigned := ()
   )
+
   val sonatypePublishSettings = Seq(
     publishArtifact in packageDoc := buildWithDoc,
     publishArtifact in (Compile, packageSrc) := true,
     sonatypeProfileName := "com.typesafe"
   )
 
+  val githubPublishSettings = Seq(
+    publishArtifact in packageDoc := buildWithDoc,
+    publishArtifact in (Compile, packageSrc) := true,
+
+    publishTo := Some("GitHub Package Registry" at s"https://maven.pkg.github.com/$githubRepositoryOwner/$githubRepository"),
+    pomIncludeRepository := (_ => false),
+    publishMavenStyle := true
+  )
+
+
+
   def PlaySharedJavaProject(name: String, dir: String, testBinaryCompatibility: Boolean = false): Project = {
     val bcSettings: Seq[Setting[_]] = mimaDefaultSettings ++ (if (testBinaryCompatibility) {
       Seq(previousArtifact := Some(buildOrganization % moduleName.value % previousVersion))
     } else Nil)
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
+      .disablePlugins(Sonatype, BintrayPlugin)
       .configs(PerformanceTest)
       .settings(inConfig(PerformanceTest)(Defaults.testTasks) : _*)
       .settings(playCommonSettings: _*)
-      .settings((if (publishNonCoreScalaLibraries) sonatypePublishSettings else dontPublishSettings): _*)
+      .settings(githubPublishSettings: _*)
       .settings(bcSettings: _*)
       .settings(
         scalaVersion := defaultScalaVersion,
@@ -134,10 +157,10 @@ object BuildSettings {
    */
   def PlayDevelopmentProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
+      .disablePlugins(Sonatype, BintrayPlugin)
       .settings(playCommonSettings: _*)
       .settings(defaultScalariformSettings: _*)
-      .settings(sonatypePublishSettings: _*)
+      .settings(githubPublishSettings: _*)
       .settings(mimaDefaultSettings: _*)
   }
 
@@ -146,11 +169,11 @@ object BuildSettings {
    */
   def PlayRuntimeProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
+      .disablePlugins(Sonatype, BintrayPlugin)
       .configs(PerformanceTest)
       .settings(inConfig(PerformanceTest)(Defaults.testTasks) : _*)
       .settings(playCommonSettings: _*)
-      .settings(sonatypePublishSettings: _*)
+      .settings(githubPublishSettings: _*)
       .settings(mimaDefaultSettings: _*)
       .settings(defaultScalariformSettings: _*)
       .settings(playRuntimeSettings: _*)
@@ -164,9 +187,9 @@ object BuildSettings {
 
   def PlaySbtProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
+      .disablePlugins(Sonatype, BintrayPlugin)
       .settings(playCommonSettings: _*)
-      .settings((if (publishNonCoreScalaLibraries) sonatypePublishSettings else dontPublishSettings): _*)
+      .settings((if (publishNonCoreScalaLibraries) githubPublishSettings else dontPublishSettings): _*)
       .settings(defaultScalariformSettings: _*)
       .settings(
         scalaVersion := buildScalaVersionForSbt,
@@ -176,15 +199,11 @@ object BuildSettings {
 
   def PlaySbtPluginProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(Sonatype)
+      .disablePlugins(Sonatype, BintrayPlugin)
       .settings(playCommonSettings: _*)
-      .settings((if (publishNonCoreScalaLibraries) Nil else dontPublishSettings): _*)
+      .settings((if (publishNonCoreScalaLibraries) githubPublishSettings else dontPublishSettings): _*)
       .settings(defaultScalariformSettings: _*)
       .settings(
-        bintrayOrganization := Some("playframework"),
-        bintrayRepository := "sbt-plugin-releases",
-        bintrayPackage := "play-sbt-plugin",
-        bintrayReleaseOnPublish := false,
         scalaVersion := buildScalaVersionForSbt,
         scalaBinaryVersion := CrossVersion.binaryScalaVersion(buildScalaVersionForSbt),
         scalacOptions ++= Seq("-encoding", "UTF-8", "-Xlint", "-deprecation", "-unchecked"))
@@ -227,7 +246,7 @@ object Resolvers {
   // See http://blog.ontoillogical.com/blog/2014/07/28/how-to-take-over-any-java-developer/
   val sbtPluginSnapshots = Resolver.url("sbt plugin snapshots", url("http://repo.scala-sbt.org/scalasbt/sbt-plugin-snapshots"))(Resolver.ivyStylePatterns)
 
-  val isSnapshotBuild = buildVersion.endsWith("SNAPSHOT")
+  val isSnapshotBuild = false // SNAPSHOT build for us, but will be used in production
   val playResolvers = if (isSnapshotBuild) {
     Seq(typesafeReleases, typesafeIvyReleases, typesafeSnapshots, typesafeIvySnapshots, sonatypeSnapshots, sbtPluginSnapshots)
   } else {
@@ -362,7 +381,7 @@ object PlayBuild extends Build {
   lazy val SbtPluginProject = PlaySbtPluginProject("SBT-Plugin", "sbt-plugin")
     .settings(
       sbtPlugin := true,
-      publishMavenStyle := false,
+      publishMavenStyle := true,
       libraryDependencies ++= sbtDependencies,
       sourceGenerators in Compile <+= (version, scalaVersion, sbtVersion, sourceManaged in Compile) map PlayVersion,
       sbtVersion in GlobalScope := buildSbtVersion,
